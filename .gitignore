@@ -1,0 +1,61 @@
+# Scratch / ephemeral downloads and notes
+.scratch/
+
+# CMake / C++ build output
+build/
+_build/
+cmake-build-*/
+out/
+
+# Compiled artifacts
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python distributions
+dist/
+wheels/
+*.whl
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ccache
+.ccache/
+
+# Logs
+*.log
+
+# Large generated benchmark fixtures (regenerated per run)
+benchmark/data/*.root
+data/samples/
+
+# Local environment files
+.env
+.env.local
