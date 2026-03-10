@@ -1,0 +1,15 @@
+---
+Checks: >-
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  performance-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  readability-braces-around-statements,
+  -fuchsia-*,
+  -llvm-*,
+  -clang-analyzer-*
+HeaderFilterRegex: "engine/include/rag/.*"
+WarningsAsErrors: ""
+CheckOptions:
+  - { key: modernize-use-default-member-init.UseAssignment, value: "true" }
