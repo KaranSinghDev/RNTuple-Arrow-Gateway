@@ -1,17 +1,8 @@
-# Verify tag at: https://hub.docker.com/r/rootproject/root/tags
-FROM rootproject/root:6.36.00-ubuntu24.04
+# Tag list: https://hub.docker.com/r/rootproject/root/tags
+FROM rootproject/root:6.36.00-ubuntu25.04
 
-# Apache Arrow apt repository (Ubuntu 24.04 "noble")
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget \
-  && wget -q https://apache.jfrog.io/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-noble.deb \
-  && apt-get install -y --no-install-recommends \
-    ./apache-arrow-apt-source-latest-noble.deb \
-  && apt-get update \
-  && rm ./apache-arrow-apt-source-latest-noble.deb \
-  && rm -rf /var/lib/apt/lists/*
-
-# Build tools + RAG dependencies
+# Ubuntu 25.04 (plucky) ships Arrow in its default repos.
+# No external PPA needed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     ninja-build \
