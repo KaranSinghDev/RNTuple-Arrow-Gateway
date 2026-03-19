@@ -39,6 +39,8 @@ RUN git clone --depth 1 --branch apache-arrow-${ARROW_VERSION} \
       -DARROW_WITH_LZ4=ON \
       -DARROW_WITH_ZSTD=ON \
       -DARROW_WITH_SNAPPY=ON \
+      -DgRPC_SOURCE=BUNDLED \
+      -DProtobuf_SOURCE=BUNDLED \
   && cmake --build /tmp/arrow-build --parallel "$(nproc)" \
   && cmake --install /tmp/arrow-build \
   && ldconfig \
