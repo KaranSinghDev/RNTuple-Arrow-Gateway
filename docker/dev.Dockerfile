@@ -1,8 +1,8 @@
 # Tag list: https://hub.docker.com/r/rootproject/root/tags
 FROM rootproject/root:6.36.00-ubuntu25.04
 
-# Build tools + compression libs + GTest + Benchmark + pybind11.
-# Arrow is NOT in Ubuntu 25.04 repos, so we build it below.
+# Build tools + Arrow's system deps (gRPC 1.51.1, abseil, RE2 all available in Ubuntu 25.04).
+# Having these from apt means Arrow only compiles its own core — ~10-20 min vs ~60-90 min.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     ninja-build \
@@ -14,6 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     liblz4-dev \
     libzstd-dev \
     libsnappy-dev \
+    libgrpc++-dev \
+    libabsl-dev \
+    libre2-dev \
+    protobuf-compiler-grpc \
+    libprotobuf-dev \
     libgtest-dev \
     libbenchmark-dev \
     python3-dev \
@@ -23,11 +28,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Build Apache Arrow C++ 19.0.0 + Flight from source.
-# ARROW_DEPENDENCY_SOURCE defaults to AUTO: uses system libs where available,
-# bundles (downloads + compiles) the rest — notably gRPC and protobuf.
-# One-time cost: ~25-40 min. Layer is cached on subsequent docker builds.
+# System gRPC/protobuf/abseil/RE2 are used — Arrow only compiles its own core.
+# One-time cost: ~10-20 min. Layer is cached on subsequent docker builds.
 ARG ARROW_VERSION=19.0.0
-# Limit parallel jobs to control RAM use. Pass --build-arg JOBS=1 for ~1 GB peak.
 ARG JOBS=2
 RUN git clone --depth 1 --branch apache-arrow-${ARROW_VERSION} \
       https://github.com/apache/arrow.git /tmp/arrow-src \
@@ -41,8 +44,6 @@ RUN git clone --depth 1 --branch apache-arrow-${ARROW_VERSION} \
       -DARROW_WITH_LZ4=ON \
       -DARROW_WITH_ZSTD=ON \
       -DARROW_WITH_SNAPPY=ON \
-      -DgRPC_SOURCE=BUNDLED \
-      -DProtobuf_SOURCE=BUNDLED \
   && cmake --build /tmp/arrow-build --parallel "${JOBS}" \
   && cmake --install /tmp/arrow-build \
   && ldconfig \
