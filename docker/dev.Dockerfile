@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # bundles (downloads + compiles) the rest — notably gRPC and protobuf.
 # One-time cost: ~25-40 min. Layer is cached on subsequent docker builds.
 ARG ARROW_VERSION=19.0.0
+# Limit parallel jobs to control RAM use. Pass --build-arg JOBS=1 for ~1 GB peak.
+ARG JOBS=2
 RUN git clone --depth 1 --branch apache-arrow-${ARROW_VERSION} \
       https://github.com/apache/arrow.git /tmp/arrow-src \
   && cmake -S /tmp/arrow-src/cpp -B /tmp/arrow-build -G Ninja \
@@ -41,7 +43,7 @@ RUN git clone --depth 1 --branch apache-arrow-${ARROW_VERSION} \
       -DARROW_WITH_SNAPPY=ON \
       -DgRPC_SOURCE=BUNDLED \
       -DProtobuf_SOURCE=BUNDLED \
-  && cmake --build /tmp/arrow-build --parallel "$(nproc)" \
+  && cmake --build /tmp/arrow-build --parallel "${JOBS}" \
   && cmake --install /tmp/arrow-build \
   && ldconfig \
   && rm -rf /tmp/arrow-src /tmp/arrow-build
