@@ -1,4 +1,3 @@
-enable_testing()
 include(GoogleTest)
 
 add_executable(test_hello test_hello.cpp)

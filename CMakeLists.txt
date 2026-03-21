@@ -11,6 +11,10 @@ option(RAG_SANITIZE        "Enable ASan + UBSan"        OFF)
 include(cmake/RAGCompileOptions.cmake)
 include(cmake/RAGDependencies.cmake)
 
+if(RAG_BUILD_TESTS)
+  enable_testing()
+endif()
+
 add_subdirectory(engine)
 
 if(RAG_BUILD_FLIGHT)
