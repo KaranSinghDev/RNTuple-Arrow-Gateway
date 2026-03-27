@@ -35,7 +35,7 @@ Result<std::shared_ptr<arrow::DataType>> MapFieldType(
 }
 
 Result<std::shared_ptr<arrow::Schema>> MapSchema(
-    const ROOT::RNTupleReader& reader,
+    ROOT::RNTupleReader& reader,
     const ReaderOptions& opts)
 {
     const auto& desc = reader.GetDescriptor();

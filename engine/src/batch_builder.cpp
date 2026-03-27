@@ -1,24 +1,21 @@
 #include <rag/batch_builder.hpp>
+#include "internal/column_appender.hpp"
 
-#include <arrow/array/builder_binary.h>
 #include <arrow/array/builder_primitive.h>
 #include <arrow/type.h>
-#include <arrow/type_traits.h>
 #include <ROOT/RNTupleReader.hxx>
 #include <ROOT/RNTupleView.hxx>
 
 #include <cstdint>
 #include <memory>
-#include <stdexcept>
 #include <vector>
 
 namespace rag {
 
 namespace {
 
-// Typed appender for fixed-size numeric types (int32, int64, float32, float64).
 template <typename CppType, typename ArrowBuilder>
-struct NumericAppender : BatchBuilder::IColumnAppender {
+struct NumericAppender : detail::IColumnAppender {
     ROOT::RNTupleView<CppType> view;
     ArrowBuilder builder;
 
@@ -35,8 +32,7 @@ struct NumericAppender : BatchBuilder::IColumnAppender {
     }
 };
 
-// Bool appender: RNTuple returns bool (byte), Arrow BooleanBuilder bit-packs.
-struct BoolAppender : BatchBuilder::IColumnAppender {
+struct BoolAppender : detail::IColumnAppender {
     ROOT::RNTupleView<bool> view;
     arrow::BooleanBuilder builder;
 
@@ -53,7 +49,7 @@ struct BoolAppender : BatchBuilder::IColumnAppender {
     }
 };
 
-arrow::Result<std::unique_ptr<BatchBuilder::IColumnAppender>> MakeAppender(
+arrow::Result<std::unique_ptr<detail::IColumnAppender>> MakeAppender(
     ROOT::RNTupleReader& reader,
     const std::string& field_name,
     const std::shared_ptr<arrow::DataType>& arrow_type)
@@ -91,6 +87,8 @@ arrow::Result<std::unique_ptr<BatchBuilder::IColumnAppender>> MakeAppender(
 BatchBuilder::BatchBuilder(std::shared_ptr<arrow::Schema> schema)
     : schema_(std::move(schema)) {}
 
+BatchBuilder::~BatchBuilder() = default;
+
 Result<std::unique_ptr<BatchBuilder>> BatchBuilder::Create(
     ROOT::RNTupleReader& reader,
     const std::shared_ptr<arrow::Schema>& schema)
@@ -109,13 +107,6 @@ Result<std::unique_ptr<BatchBuilder>> BatchBuilder::Create(
 Result<std::shared_ptr<arrow::RecordBatch>> BatchBuilder::Build(
     ROOT::NTupleSize_t start, ROOT::NTupleSize_t count)
 {
-    // Reserve capacity in each builder.
-    for (auto& app : appenders_) {
-        if (auto* num = dynamic_cast<IColumnAppender*>(app.get())) {
-            (void)num; // reserve happens in individual builders below
-        }
-    }
-
     for (ROOT::NTupleSize_t i = start; i < start + count; ++i) {
         for (auto& app : appenders_) {
             ARROW_RETURN_NOT_OK(app->Append(i));

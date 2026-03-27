@@ -13,7 +13,7 @@ namespace rag {
 // Maps the top-level primitive fields of an RNTuple to an arrow::Schema.
 // Unsupported types (nested, variable-length, user-defined) produce an error.
 Result<std::shared_ptr<arrow::Schema>> MapSchema(
-    const ROOT::RNTupleReader& reader,
+    ROOT::RNTupleReader& reader,
     const ReaderOptions& opts = {});
 
 // Map a single RNTuple type name string to an Arrow DataType.
