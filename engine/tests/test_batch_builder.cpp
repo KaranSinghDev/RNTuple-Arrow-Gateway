@@ -73,6 +73,15 @@ TEST_F(RNTupleFileTest, ValuesCorrect_f32) {
     }
 }
 
+TEST_F(RNTupleFileTest, ValuesCorrect_f64) {
+    auto table = file_->ReadAll().ValueOrDie();
+    auto col = std::static_pointer_cast<arrow::DoubleArray>(
+        table->GetColumnByName("f64")->chunk(0));
+    for (std::int64_t i = 0; i < kFixtureRows; ++i) {
+        ASSERT_DOUBLE_EQ(col->Value(i), static_cast<double>(i) * 0.1) << "row " << i;
+    }
+}
+
 TEST_F(RNTupleFileTest, ValuesCorrect_bool) {
     auto table = file_->ReadAll().ValueOrDie();
     auto col = std::static_pointer_cast<arrow::BooleanArray>(
