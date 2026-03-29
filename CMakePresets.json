@@ -26,7 +26,8 @@
       "displayName": "Release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "RAG_BUILD_TESTS": "ON"
+        "RAG_BUILD_TESTS": "ON",
+        "RAG_BUILD_PYTHON": "ON"
       }
     },
     {
