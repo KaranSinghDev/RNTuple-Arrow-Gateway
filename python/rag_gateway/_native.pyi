@@ -1,0 +1,3 @@
+import pyarrow as pa
+
+def open_table(path: str, ntuple_name: str) -> pa.Table: ...
