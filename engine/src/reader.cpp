@@ -62,4 +62,14 @@ Result<std::shared_ptr<arrow::Table>> RNTupleFile::ReadAll() {
     return arrow::Table::FromRecordBatches(schema_, batches);
 }
 
+Status RNTupleFile::StreamBatches(BatchCallback on_batch) {
+    next_entry_ = 0;
+    while (true) {
+        ARROW_ASSIGN_OR_RAISE(auto batch, NextBatch());
+        if (!batch) break;
+        ARROW_RETURN_NOT_OK(on_batch(std::move(batch)));
+    }
+    return Status::OK();
+}
+
 } // namespace rag

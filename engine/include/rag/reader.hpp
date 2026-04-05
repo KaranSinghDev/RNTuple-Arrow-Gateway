@@ -8,10 +8,13 @@
 #include <ROOT/RNTupleReader.hxx>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
 namespace rag {
+
+using BatchCallback = std::function<Status(std::shared_ptr<arrow::RecordBatch>)>;
 
 class RNTupleFile {
 public:
@@ -28,6 +31,9 @@ public:
 
     // Materialise all entries into a single Table.
     Result<std::shared_ptr<arrow::Table>> ReadAll();
+
+    // Push-based: resets cursor and invokes on_batch for every batch.
+    Status StreamBatches(BatchCallback on_batch);
 
 private:
     RNTupleFile() = default;
