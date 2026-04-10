@@ -77,6 +77,20 @@ TEST_F(FlightRoundTripTest, DoGet_ValuesCorrect_i64) {
     EXPECT_EQ(col->Value(42), 42 * 1000LL);
 }
 
+TEST_F(FlightRoundTripTest, DoGet_ValuesCorrect_f32) {
+    auto col = std::static_pointer_cast<arrow::FloatArray>(
+        GetTable()->column(2)->chunk(0));
+    EXPECT_NEAR(col->Value(42), 42 * 0.5f, 1e-6f);
+    EXPECT_NEAR(col->Value(0),  0 * 0.5f, 1e-6f);
+}
+
+TEST_F(FlightRoundTripTest, DoGet_ValuesCorrect_f64) {
+    auto col = std::static_pointer_cast<arrow::DoubleArray>(
+        GetTable()->column(3)->chunk(0));
+    EXPECT_NEAR(col->Value(42), 42 * 0.1, 1e-12);
+    EXPECT_NEAR(col->Value(0),  0 * 0.1, 1e-12);
+}
+
 TEST_F(FlightRoundTripTest, DoGet_ValuesCorrect_bool) {
     auto col = std::static_pointer_cast<arrow::BooleanArray>(
         GetTable()->column(4)->chunk(0));

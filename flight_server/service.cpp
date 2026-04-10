@@ -4,10 +4,35 @@
 
 #include <arrow/flight/server.h>
 #include <arrow/flight/types.h>
+#include <arrow/record_batch.h>
 #include <arrow/table.h>
 
 #include <memory>
 #include <vector>
+
+namespace {
+
+// Wraps RNTupleFile's pull-based NextBatch() as a RecordBatchReader so
+// RecordBatchStream can pull one batch at a time — no full-table materialization.
+class RNTupleBatchReader : public arrow::RecordBatchReader {
+public:
+    explicit RNTupleBatchReader(std::unique_ptr<rag::RNTupleFile> file)
+        : file_(std::move(file)) {}
+
+    std::shared_ptr<arrow::Schema> schema() const override {
+        return file_->arrow_schema();
+    }
+
+    arrow::Status ReadNext(std::shared_ptr<arrow::RecordBatch>* out) override {
+        ARROW_ASSIGN_OR_RAISE(*out, file_->NextBatch());
+        return arrow::Status::OK();
+    }
+
+private:
+    std::unique_ptr<rag::RNTupleFile> file_;
+};
+
+} // namespace
 
 namespace rag {
 
@@ -70,9 +95,8 @@ arrow::Status RNTupleFlightServer::DoGet(
 {
     ARROW_ASSIGN_OR_RAISE(auto file,
         rag::RNTupleFile::Open(file_path_, request.ticket));
-    ARROW_ASSIGN_OR_RAISE(auto table, file->ReadAll());
 
-    auto reader = std::make_shared<arrow::TableBatchReader>(table);
+    auto reader = std::make_shared<RNTupleBatchReader>(std::move(file));
     *stream = std::make_unique<arrow::flight::RecordBatchStream>(reader);
     return arrow::Status::OK();
 }
