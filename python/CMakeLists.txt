@@ -19,10 +19,23 @@ set(FIXTURE_PATH "${CMAKE_BINARY_DIR}/engine/tests/fixture.root")
 add_test(
     NAME Python.RoundTrip
     COMMAND ${Python3_EXECUTABLE} -m pytest
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/ -v
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_roundtrip.py -v
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(Python.RoundTrip PROPERTIES
     ENVIRONMENT
         "FIXTURE_PATH=${FIXTURE_PATH};FIXTURE_ROWS=1000;PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+# List-column tests via pybind11
+set(FIXTURE_LISTS_PATH "${CMAKE_BINARY_DIR}/engine/tests/fixture_lists.root")
+add_test(
+    NAME Python.ListColumns
+    COMMAND ${Python3_EXECUTABLE} -m pytest
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_list_columns.py -v
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(Python.ListColumns PROPERTIES
+    ENVIRONMENT
+        "FIXTURE_LISTS_PATH=${FIXTURE_LISTS_PATH};PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}"
 )

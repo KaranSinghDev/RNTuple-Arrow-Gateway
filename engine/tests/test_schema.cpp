@@ -14,7 +14,7 @@ TEST(SchemaMapper, MapFieldType_primitives) {
 }
 
 TEST(SchemaMapper, MapFieldType_unsupported_returns_error) {
-    auto result = rag::MapFieldType("std::vector<float>");
+    auto result = rag::MapFieldType("MyCustomClass");
     EXPECT_FALSE(result.ok());
 }
 
