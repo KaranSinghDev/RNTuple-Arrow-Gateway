@@ -1,6 +1,7 @@
 #include <rag/batch_builder.hpp>
 #include "internal/column_appender.hpp"
 
+#include <arrow/array/builder_nested.h>
 #include <arrow/array/builder_primitive.h>
 #include <arrow/type.h>
 #include <ROOT/RNTupleReader.hxx>
@@ -28,6 +29,65 @@ struct NumericAppender : detail::IColumnAppender {
     arrow::Result<std::shared_ptr<arrow::Array>> Finish() override {
         std::shared_ptr<arrow::Array> arr;
         ARROW_RETURN_NOT_OK(builder.Finish(&arr));
+        return arr;
+    }
+};
+
+template <typename CppType, typename InnerBuilder>
+struct ListAppender : detail::IColumnAppender {
+    ROOT::RNTupleView<std::vector<CppType>> view;
+    arrow::ListBuilder list_builder;
+    InnerBuilder* value_builder;  // non-owning; lifetime tied to list_builder
+
+    explicit ListAppender(ROOT::RNTupleView<std::vector<CppType>> v)
+        : view(std::move(v))
+        , list_builder(arrow::default_memory_pool(),
+                       std::make_shared<InnerBuilder>())
+        , value_builder(static_cast<InnerBuilder*>(list_builder.value_builder()))
+    {}
+
+    arrow::Status Append(ROOT::NTupleSize_t entry_id) override {
+        ARROW_RETURN_NOT_OK(list_builder.Append());
+        for (const auto& elem : view(entry_id)) {
+            ARROW_RETURN_NOT_OK(value_builder->Append(
+                static_cast<typename InnerBuilder::value_type>(elem)));
+        }
+        return arrow::Status::OK();
+    }
+
+    arrow::Result<std::shared_ptr<arrow::Array>> Finish() override {
+        std::shared_ptr<arrow::Array> arr;
+        ARROW_RETURN_NOT_OK(list_builder.Finish(&arr));
+        return arr;
+    }
+};
+
+struct BoolListAppender : detail::IColumnAppender {
+    ROOT::RNTupleView<std::vector<bool>> view;
+    arrow::ListBuilder list_builder;
+    arrow::BooleanBuilder* value_builder;
+
+    explicit BoolListAppender(ROOT::RNTupleView<std::vector<bool>> v)
+        : view(std::move(v))
+        , list_builder(arrow::default_memory_pool(),
+                       std::make_shared<arrow::BooleanBuilder>())
+        , value_builder(
+              static_cast<arrow::BooleanBuilder*>(list_builder.value_builder()))
+    {}
+
+    arrow::Status Append(ROOT::NTupleSize_t entry_id) override {
+        ARROW_RETURN_NOT_OK(list_builder.Append());
+        const auto& vec = view(entry_id);
+        // vector<bool> uses proxy elements; index explicitly to force bool cast.
+        for (std::size_t i = 0; i < vec.size(); ++i) {
+            ARROW_RETURN_NOT_OK(value_builder->Append(static_cast<bool>(vec[i])));
+        }
+        return arrow::Status::OK();
+    }
+
+    arrow::Result<std::shared_ptr<arrow::Array>> Finish() override {
+        std::shared_ptr<arrow::Array> arr;
+        ARROW_RETURN_NOT_OK(list_builder.Finish(&arr));
         return arr;
     }
 };
@@ -76,6 +136,29 @@ arrow::Result<std::unique_ptr<detail::IColumnAppender>> MakeAppender(
             reader.GetView<double>(field_name));
     case Type::BOOL:
         return std::make_unique<BoolAppender>(reader.GetView<bool>(field_name));
+    case Type::LIST: {
+        auto inner = std::static_pointer_cast<arrow::ListType>(arrow_type)->value_type();
+        switch (inner->id()) {
+        case Type::INT32:
+            return std::make_unique<ListAppender<std::int32_t, arrow::Int32Builder>>(
+                reader.GetView<std::vector<std::int32_t>>(field_name));
+        case Type::INT64:
+            return std::make_unique<ListAppender<std::int64_t, arrow::Int64Builder>>(
+                reader.GetView<std::vector<std::int64_t>>(field_name));
+        case Type::FLOAT:
+            return std::make_unique<ListAppender<float, arrow::FloatBuilder>>(
+                reader.GetView<std::vector<float>>(field_name));
+        case Type::DOUBLE:
+            return std::make_unique<ListAppender<double, arrow::DoubleBuilder>>(
+                reader.GetView<std::vector<double>>(field_name));
+        case Type::BOOL:
+            return std::make_unique<BoolListAppender>(
+                reader.GetView<std::vector<bool>>(field_name));
+        default:
+            return arrow::Status::NotImplemented(
+                "No list appender for inner Arrow type: ", inner->ToString());
+        }
+    }
     default:
         return arrow::Status::NotImplemented(
             "No appender for Arrow type: ", arrow_type->ToString());

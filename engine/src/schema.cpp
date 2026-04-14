@@ -26,12 +26,24 @@ const std::unordered_map<std::string, std::shared_ptr<arrow::DataType>> kTypeMap
 Result<std::shared_ptr<arrow::DataType>> MapFieldType(
     const std::string& rntuple_type_name)
 {
+    // Scalar fast path.
     auto it = kTypeMap.find(rntuple_type_name);
-    if (it == kTypeMap.end()) {
-        return arrow::Status::NotImplemented(
-            "RNTuple type not supported in M1: \"", rntuple_type_name, "\"");
+    if (it != kTypeMap.end()) return it->second;
+
+    // Single-level vector: "std::vector<inner_type>"
+    static const std::string kVecPrefix = "std::vector<";
+    if (rntuple_type_name.size() > kVecPrefix.size() + 1 &&
+        rntuple_type_name.compare(0, kVecPrefix.size(), kVecPrefix) == 0 &&
+        rntuple_type_name.back() == '>') {
+        const std::string inner =
+            rntuple_type_name.substr(kVecPrefix.size(),
+                rntuple_type_name.size() - kVecPrefix.size() - 1);
+        ARROW_ASSIGN_OR_RAISE(auto inner_type, MapFieldType(inner));
+        return arrow::list(inner_type);
     }
-    return it->second;
+
+    return arrow::Status::NotImplemented(
+        "RNTuple type not yet supported: \"", rntuple_type_name, "\"");
 }
 
 Result<std::shared_ptr<arrow::Schema>> MapSchema(
