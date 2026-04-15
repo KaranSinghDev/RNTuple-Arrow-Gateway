@@ -40,3 +40,27 @@ target_compile_definitions(test_batch_builder PRIVATE
 rag_set_compile_options(test_batch_builder)
 add_dependencies(test_batch_builder engine_fixture)
 gtest_discover_tests(test_batch_builder)
+
+# List-column fixture
+add_executable(gen_fixture_lists data/gen_fixture_lists.cpp)
+target_link_libraries(gen_fixture_lists PRIVATE ROOT::ROOTNTuple)
+rag_set_compile_options(gen_fixture_lists)
+
+set(FIXTURE_LISTS_PATH "${CMAKE_CURRENT_BINARY_DIR}/fixture_lists.root")
+
+add_custom_command(
+    OUTPUT  "${FIXTURE_LISTS_PATH}"
+    COMMAND gen_fixture_lists "${FIXTURE_LISTS_PATH}"
+    DEPENDS gen_fixture_lists
+    COMMENT "Generating RNTuple list-column fixture"
+)
+add_custom_target(engine_fixture_lists ALL DEPENDS "${FIXTURE_LISTS_PATH}")
+
+# List-column round-trip tests
+add_executable(test_list_columns test_list_columns.cpp)
+target_link_libraries(test_list_columns PRIVATE GTest::gtest_main rag::engine)
+target_compile_definitions(test_list_columns PRIVATE
+    FIXTURE_LISTS_PATH="${FIXTURE_LISTS_PATH}")
+rag_set_compile_options(test_list_columns)
+add_dependencies(test_list_columns engine_fixture_lists)
+gtest_discover_tests(test_list_columns)
