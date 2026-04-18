@@ -49,7 +49,14 @@ RUN git clone --depth 1 --branch apache-arrow-${ARROW_VERSION} \
   && ldconfig \
   && rm -rf /tmp/arrow-src /tmp/arrow-build
 
-# Python packages: pyarrow pinned to match Arrow C++ version; pytest for Python sink tests
-RUN pip3 install --no-cache-dir --break-system-packages "pyarrow==${ARROW_VERSION}" pytest
+# Python packages: pyarrow + benchmark deps (uproot, awkward, matplotlib, pandas, numpy)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    "pyarrow==${ARROW_VERSION}" \
+    pytest \
+    uproot \
+    awkward \
+    matplotlib \
+    pandas \
+    numpy
 
 WORKDIR /workspace
