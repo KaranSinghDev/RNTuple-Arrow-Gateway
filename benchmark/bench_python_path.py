@@ -13,6 +13,7 @@ Methodology:
 """
 
 import csv
+import gc
 import os
 import statistics
 import sys
@@ -28,10 +29,12 @@ N_REPS   = 5
 N_WARMUP = 1
 NTUPLE   = "bench"
 
+# 1GB fixture excluded from Python benchmarks: uproot's awkward intermediate
+# representation peaks at ~3-4x uncompressed size, exceeding typical test
+# machine RAM. C++ benchmark (bench_cpp_path) covers all three sizes.
 FIXTURES = {
-    "100MB":  os.environ["FIXTURE_SMALL"],
-    "500MB":  os.environ["FIXTURE_MEDIUM"],
-    "1GB":    os.environ["FIXTURE_LARGE"],
+    "100MB": os.environ["FIXTURE_SMALL"],
+    "500MB": os.environ["FIXTURE_MEDIUM"],
 }
 RESULTS_DIR = os.environ["RESULTS_DIR"]
 
@@ -76,6 +79,7 @@ def bench(fn, path: str):
     times = []
     table = None
     for i in range(N_WARMUP + N_REPS):
+        gc.collect()
         t0 = time.perf_counter()
         table = fn(path)
         t1 = time.perf_counter()
@@ -111,6 +115,7 @@ def main():
         results = {}
         tables  = {}
         for method, fn in METHODS.items():
+            gc.collect()
             print(f"  {method} ...", end="", flush=True)
             times, table = bench(fn, path)
             results[method] = times

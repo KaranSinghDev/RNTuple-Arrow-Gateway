@@ -1,0 +1,15 @@
+date: 2026-04-25T04:28:58Z
+os: Linux 6.6.87.2-microsoft-standard-WSL2 x86_64
+cpu: 12th Gen Intel(R) Core(TM) i7-12700H
+cores_logical: 20
+ram_gb: 7.6
+python: Python 3.13.3
+pyarrow: 19.0.0
+uproot: 5.7.3
+awkward: 2.9.0
+arrow_cpp: 19.0.0
+google_benchmark: 1.9.1
+fixture_small_disk: 79M
+fixture_medium_disk: 392M
+fixture_large_disk: 784M
+note_python_1gb: excluded — uproot awkward intermediate exceeds 3GB test limit

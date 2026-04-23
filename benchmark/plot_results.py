@@ -126,13 +126,14 @@ def plot_cpp_overhead():
 
     for bm in benchmarks:
         name = bm.get("name", "")
-        # name format: BM_RawRNTuple/0_mean  or  BM_RawRNTuple/0
+        # name format: BM_RawRNTuple/0/min_time:5.000_mean
         for bm_key in bm_names:
             base = bm_key.replace("_mean", "")
             if name.startswith(base + "/") and name.endswith("_mean"):
-                arg = name[len(base)+1:].replace("_mean", "")
+                # extract arg: first segment after base/
+                rest = name[len(base)+1:]          # e.g. "0/min_time:5.000_mean"
+                arg = rest.split("/")[0]           # e.g. "0"
                 size = label_map.get(arg, arg)
-                # bytes_per_second in Google Benchmark JSON
                 bps = float(bm.get("bytes_per_second", 0))
                 data[bm_key][size] = bps / 1e6
                 errs[bm_key][size] = 0.0
@@ -144,7 +145,8 @@ def plot_cpp_overhead():
             for bm_key in bm_names:
                 base = bm_key.replace("_mean", "")
                 if name.startswith(base + "/") and name.endswith("_mean"):
-                    arg = name[len(base)+1:].replace("_mean", "")
+                    rest = name[len(base)+1:]
+                    arg  = rest.split("/")[0]
                     size = label_map.get(arg, arg)
                     ms = float(bm.get("real_time", 0))
                     data[bm_key][size] = ms

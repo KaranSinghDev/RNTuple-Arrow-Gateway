@@ -5,12 +5,16 @@
 //
 // Usage: gen_bench_fixture <output_path> <num_rows>
 
+// Uses seeded mt19937 so fixtures are reproducible across runs.
+// Values are pseudo-random (not sequential) — gives realistic compression
+// ratios comparable to real HEP data.
+
 #include <ROOT/RNTupleModel.hxx>
 #include <ROOT/RNTupleWriter.hxx>
 
 #include <cstdint>
-#include <cstdlib>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -19,11 +23,19 @@ int main(int argc, char* argv[]) {
         std::cerr << "Usage: " << argv[0] << " <output_path> <num_rows>\n";
         return 1;
     }
-    const std::string path    = argv[1];
-    const std::int64_t nrows  = std::stoll(argv[2]);
+    const std::string  path  = argv[1];
+    const std::int64_t nrows = std::stoll(argv[2]);
+
+    std::mt19937 rng(42);
+    std::uniform_int_distribution<std::int32_t> di32(0, 1'000'000);
+    std::uniform_int_distribution<std::int64_t> di64(0, 1'000'000'000'000LL);
+    std::uniform_real_distribution<float>       df32(0.f, 1000.f);
+    std::uniform_real_distribution<double>      df64(0.0, 10000.0);
+    std::bernoulli_distribution                 dbool(0.5);
+    std::uniform_int_distribution<int>          dlen32(1, 8);
+    std::uniform_int_distribution<int>          dlenf32(1, 6);
 
     auto model = ROOT::RNTupleModel::Create();
-
     auto fi32  = model->MakeField<std::int32_t>("i32");
     auto fi64  = model->MakeField<std::int64_t>("i64");
     auto ff32  = model->MakeField<float>("f32");
@@ -35,21 +47,19 @@ int main(int argc, char* argv[]) {
     auto writer = ROOT::RNTupleWriter::Recreate(std::move(model), "bench", path);
 
     for (std::int64_t i = 0; i < nrows; ++i) {
-        *fi32 = static_cast<std::int32_t>(i % INT32_MAX);
-        *fi64 = i * 1000LL;
-        *ff32 = static_cast<float>(i) * 0.5f;
-        *ff64 = static_cast<double>(i) * 0.1;
-        *fb   = (i % 2 == 0);
+        *fi32 = di32(rng);
+        *fi64 = di64(rng);
+        *ff32 = df32(rng);
+        *ff64 = df64(rng);
+        *fb   = dbool(rng);
 
-        int n32 = static_cast<int>(i % 8) + 1;
+        int n32 = dlen32(rng);
         fvi32->resize(n32);
-        for (int k = 0; k < n32; ++k)
-            (*fvi32)[k] = static_cast<std::int32_t>((i + k) % INT32_MAX);
+        for (int k = 0; k < n32; ++k) (*fvi32)[k] = di32(rng);
 
-        int nf32 = static_cast<int>(i % 6) + 1;
-        fvf32->resize(nf32);
-        for (int k = 0; k < nf32; ++k)
-            (*fvf32)[k] = static_cast<float>(i + k) * 0.25f;
+        int nf = dlenf32(rng);
+        fvf32->resize(nf);
+        for (int k = 0; k < nf; ++k) (*fvf32)[k] = df32(rng);
 
         writer->Fill();
     }

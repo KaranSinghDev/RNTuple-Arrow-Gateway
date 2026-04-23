@@ -25,10 +25,10 @@ N_REPS   = 5
 N_WARMUP = 1
 NTUPLE   = "bench"
 
+# 1GB fixture excluded: same memory constraint as Python path benchmark.
 FIXTURES = {
     "100MB": os.environ["FIXTURE_SMALL"],
     "500MB": os.environ["FIXTURE_MEDIUM"],
-    "1GB":   os.environ["FIXTURE_LARGE"],
 }
 FLIGHT_SERVER = os.environ["FLIGHT_SERVER"]
 RESULTS_DIR   = os.environ["RESULTS_DIR"]
