@@ -1,5 +1,5 @@
 """
-Python path benchmark: uproot naive vs uproot fast (ak→arrow) vs RAG pybind11.
+Python path benchmark: uproot (ak→arrow) vs RAG pybind11.
 
 Env vars required:
     FIXTURE_SMALL, FIXTURE_MEDIUM, FIXTURE_LARGE  — paths to .root files
@@ -9,7 +9,7 @@ Methodology:
     - 1 warmup run (discarded), then N_REPS timed runs per (method, fixture).
     - Wall time measured with time.perf_counter().
     - Throughput = Arrow table uncompressed buffer bytes / median wall time (MB/s).
-    - Correctness: RAG output is byte-checked against uproot fast-path output.
+    - Correctness: RAG output verified column-for-column (all columns) against uproot.
 """
 
 import csv
@@ -51,14 +51,10 @@ def table_bytes(table: pa.Table) -> int:
 
 # ── Benchmark functions ───────────────────────────────────────────────────────
 
-def run_uproot_naive(path: str) -> pa.Table:
-    with uproot.open(path) as f:
-        arrays = f[NTUPLE].arrays()
-    # Convert awkward arrays to pyarrow for a fair bytes comparison
-    return ak.to_arrow_table(arrays)
-
-
-def run_uproot_fast(path: str) -> pa.Table:
+def run_uproot_ak(path: str) -> pa.Table:
+    # Recommended uproot path to Arrow: awkward intermediate, then ak.to_arrow_table.
+    # This is the fair baseline — uproot's hot path is compiled C++/Cython via
+    # Awkward + AwkwardForth.
     with uproot.open(path) as f:
         arr = f[NTUPLE].arrays(library="ak")
     return ak.to_arrow_table(arr)
@@ -69,8 +65,7 @@ def run_rag(path: str) -> pa.Table:
 
 
 METHODS = {
-    "uproot_naive": run_uproot_naive,
-    "uproot_fast":  run_uproot_fast,
+    "uproot_ak":    run_uproot_ak,
     "rag_pybind11": run_rag,
 }
 
@@ -93,14 +88,12 @@ def bench(fn, path: str):
 def check_correctness(ref: pa.Table, got: pa.Table, label: str):
     assert ref.num_rows == got.num_rows, \
         f"[{label}] row count mismatch: {ref.num_rows} vs {got.num_rows}"
-    for col in ["i32", "i64", "f32", "f64", "b"]:
-        if col not in ref.schema.names or col not in got.schema.names:
-            continue
+    common = sorted(set(ref.schema.names) & set(got.schema.names))
+    for col in common:
         r = ref.column(col).to_pylist()
         g = got.column(col).to_pylist()
-        assert r == g, f"[{label}] column '{col}' mismatch at first diff index " \
-                       f"{next(i for i,(a,b) in enumerate(zip(r,g)) if a!=b)}"
-    print(f"  correctness OK ({label})")
+        assert r == g, f"[{label}] column '{col}' mismatch"
+    print(f"  correctness OK ({label}, {len(common)} columns verified)")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -138,8 +131,8 @@ def main():
                 "reps":       N_REPS,
             })
 
-        # Correctness: RAG vs uproot_fast (reference)
-        ref = tables["uproot_fast"]
+        # Correctness: RAG vs uproot_ak (reference) — all columns including lists
+        ref = tables["uproot_ak"]
         check_correctness(ref, tables["rag_pybind11"], f"{size_label}/rag_pybind11")
         print()
 

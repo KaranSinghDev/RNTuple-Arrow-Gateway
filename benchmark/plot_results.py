@@ -1,7 +1,7 @@
 """
 Generates 3 publication-quality benchmark plots from CSV results.
 
-Plot 1 — Python path throughput comparison (uproot naive / uproot fast / RAG)
+Plot 1 — Python path throughput comparison (uproot ak→arrow vs RAG pybind11)
 Plot 2 — C++ path overhead (raw RNTupleReader vs RAG ReadAll vs RAG streaming)
 Plot 3 — Arrow Flight gRPC overhead (in-process vs localhost Flight)
 
@@ -25,8 +25,7 @@ SIZE_ORDER  = ["100MB", "500MB", "1GB"]
 FIG_DPI     = 150
 BAR_WIDTH   = 0.22
 COLORS = {
-    "uproot_naive":           "#e07b39",
-    "uproot_fast":            "#4c97c9",
+    "uproot_ak":              "#4c97c9",
     "rag_pybind11":           "#2ca02c",
     "BM_RawRNTuple_mean":     "#e07b39",
     "BM_RAGReadAll_mean":     "#2ca02c",
@@ -35,8 +34,7 @@ COLORS = {
     "rag_flight_localhost":   "#d62728",
 }
 LABELS = {
-    "uproot_naive":           "uproot (naive)",
-    "uproot_fast":            "uproot fast (ak→arrow)",
+    "uproot_ak":              "uproot (ak→arrow)",
     "rag_pybind11":           "RAG pybind11",
     "BM_RawRNTuple_mean":     "Raw RNTupleReader",
     "BM_RAGReadAll_mean":     "RAG ReadAll",
@@ -78,7 +76,7 @@ def plot_python_throughput():
         print("  [skip] python_path.csv not found")
         return
 
-    methods = ["uproot_naive", "uproot_fast", "rag_pybind11"]
+    methods = ["uproot_ak", "rag_pybind11"]
     data = defaultdict(dict)
     errs = defaultdict(dict)
     for r in rows:
@@ -101,7 +99,7 @@ def plot_python_throughput():
     ax.set_xlabel("Fixture size", fontsize=12)
     ax.set_ylabel("Throughput (MB/s, uncompressed)", fontsize=12)
     ax.set_title("RNTuple Read Throughput — Python Path\n"
-                 "(uproot naive vs uproot fast vs RAG pybind11)", fontsize=13)
+                 "(uproot ak→arrow vs RAG pybind11)", fontsize=13)
     ax.set_xticks(x)
     ax.set_xticklabels(SIZE_ORDER)
     ax.legend(fontsize=10)

@@ -49,6 +49,7 @@ static const char* kLabels[3] = { "100MB", "500MB", "1GB" };
 // This mirrors what a physicist would write today with no Arrow dependency.
 static void BM_RawRNTuple(benchmark::State& state) {
     const char* path = kFixtures[state.range(0)];
+    std::int64_t bytes_per_iter = 0;
     for (auto _ : state) {
         auto reader = ROOT::RNTupleReader::Open("bench", path);
 
@@ -63,18 +64,21 @@ static void BM_RawRNTuple(benchmark::State& state) {
         std::int64_t n = static_cast<std::int64_t>(reader->GetNEntries());
         std::int64_t ichecksum = 0;
         double       fchecksum = 0.0;
+        std::int64_t bytes     = 0;
         for (std::int64_t i = 0; i < n; ++i) {
-            ichecksum += vi32(i);
-            ichecksum += vi64(i);
-            fchecksum += vf32(i);
-            fchecksum += vf64(i);
-            ichecksum += static_cast<int>(vb(i));
-            for (auto v : vvi32(i)) ichecksum += v;
-            for (auto v : vvf32(i)) fchecksum += v;
+            ichecksum += vi32(i);                          bytes += 4;
+            ichecksum += vi64(i);                          bytes += 8;
+            fchecksum += vf32(i);                          bytes += 4;
+            fchecksum += vf64(i);                          bytes += 8;
+            ichecksum += static_cast<int>(vb(i));          bytes += 1;
+            for (auto v : vvi32(i)) { ichecksum += v;      bytes += 4; }
+            for (auto v : vvf32(i)) { fchecksum += v;      bytes += 4; }
         }
         benchmark::DoNotOptimize(ichecksum);
         benchmark::DoNotOptimize(fchecksum);
+        bytes_per_iter = bytes;  // same every iteration; overwrite is correct
     }
+    state.SetBytesProcessed(static_cast<std::int64_t>(state.iterations()) * bytes_per_iter);
     state.SetLabel(kLabels[state.range(0)]);
 }
 BENCHMARK(BM_RawRNTuple)

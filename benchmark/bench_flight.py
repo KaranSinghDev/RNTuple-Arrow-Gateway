@@ -11,6 +11,7 @@ Env vars required:
 """
 
 import csv
+import gc
 import os
 import socket
 import statistics
@@ -85,6 +86,7 @@ def bench_inprocess(path: str):
     times = []
     table = None
     for i in range(N_WARMUP + N_REPS):
+        gc.collect()
         t0 = time.perf_counter()
         table = run_inprocess(path)
         t1 = time.perf_counter()
@@ -100,6 +102,7 @@ def bench_flight_server(path: str):
         times = []
         table = None
         for i in range(N_WARMUP + N_REPS):
+            gc.collect()
             t0 = time.perf_counter()
             table = run_flight(path, port)
             t1 = time.perf_counter()
@@ -118,10 +121,12 @@ def main():
     for size_label, path in FIXTURES.items():
         print(f"Fixture: {size_label}  ({path})")
 
+        tables = {}
         for method, fn in [("rag_inprocess", bench_inprocess),
                            ("rag_flight_localhost", bench_flight_server)]:
             print(f"  {method} ...", end="", flush=True)
             times, table = fn(path)
+            tables[method] = table
             med = statistics.median(times)
             std = statistics.stdev(times) if len(times) > 1 else 0.0
             nbytes = table_bytes(table)
@@ -139,6 +144,18 @@ def main():
                 "throughput_MBps":   round(tput, 2),
                 "reps":              N_REPS,
             })
+
+        # Correctness: Flight output must match in-process output column-for-column
+        ref = tables["rag_inprocess"]
+        got = tables["rag_flight_localhost"]
+        assert ref.num_rows == got.num_rows, \
+            f"[{size_label}] row count mismatch: {ref.num_rows} vs {got.num_rows}"
+        common = sorted(set(ref.schema.names) & set(got.schema.names))
+        for col in common:
+            assert ref.column(col).to_pylist() == got.column(col).to_pylist(), \
+                f"[{size_label}] column '{col}' mismatch between in-process and Flight"
+        print(f"  correctness OK ({size_label}: Flight == in-process, "
+              f"{len(common)} columns)")
         print()
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
