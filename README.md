@@ -1,4 +1,4 @@
-# rnarrow
+# RNArrow
 
 A C++ library and server to read CERN's ROOT **RNTuple** physics data files and expose the data as **Apache Arrow** — both in-process to Python, and over the network through an **Arrow Flight** (gRPC) streaming server.
 

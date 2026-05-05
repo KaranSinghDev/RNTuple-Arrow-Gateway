@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata from this file."
 type: software
-title: "RNTuple Arrow Gateway"
+title: "RNArrow — RNTuple Arrow Gateway"
 abstract: >
   A C++ library and Arrow Flight gRPC server that reads CERN ROOT RNTuple
   physics data files and exposes the data as Apache Arrow — both in-process
