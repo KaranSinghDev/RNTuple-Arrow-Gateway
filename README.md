@@ -56,15 +56,15 @@ The engine is the only reusable piece; the two sinks are thin wrappers over the 
 
 ## Benchmarks
 
-I ran these on a WSL2 host (12th Gen Intel i7-12700H, 7.6 GB RAM cap), so I'd treat them as indicative rather than definitive — a bare-metal re-run is on the list before I claim anything stronger. Full results: [`benchmark/results/`](benchmark/results/).
+I ran these on a WSL2 host (12th Gen Intel i7-12700H, 11.7 GB RAM), so I'd treat them as indicative rather than definitive — a bare-metal re-run is on the list before I claim anything stronger. Full results: [`benchmark/results/`](benchmark/results/).
 
 What I found:
 
-- **C++ path.** My `ReadAll` is **1.45× / 1.52× / 1.84× slower** than a raw `RNTupleReader` loop at 100 MB / 500 MB / 1 GB. I set myself a `< 2×` target; this clears it.
-- **Arrow Flight (localhost).** **~4% overhead** vs in-process at 100 MB; within measurement noise at 500 MB. Flight looks like a perfectly fine transport for this kind of data.
-- **Python path.** `pybind11` route is **2.7× / 3.2× slower** than `uproot + ak.to_arrow()` at 100 MB / 500 MB. That's the negative result I want to be upfront about — uproot's hot path is heavily optimised (compiled C++/Cython via Awkward + AwkwardForth), and I haven't profiled my code yet to find where the 2.7× actually goes.
+- **C++ path.** My `ReadAll` is **1.42× / 1.44× / 1.61× slower** than a raw `RNTupleReader` loop at 100 MB / 500 MB / 1 GB. I set myself a `< 2×` target; this clears it. Streaming is slightly faster than ReadAll at 1 GB (5133 ms vs 5803 ms) — ReadAll holds the full table in memory while accumulating batches, so the difference shows up at larger sizes.
+- **Arrow Flight (localhost).** **~5% overhead** vs in-process at 100 MB; within measurement noise at 500 MB. Flight looks like a perfectly fine transport for this kind of data.
+- **Python path.** `pybind11` route is **2.4× / 2.0× slower** than `uproot + ak.to_arrow()` at 100 MB / 500 MB. That's the negative result I want to be upfront about — uproot's hot path is heavily optimised (compiled C++/Cython via Awkward + AwkwardForth), and I haven't profiled my code yet to find where the gap actually comes from.
 
-All paths are verified column-for-column against uproot for correctness.
+All paths are verified column-for-column against uproot for correctness, including list columns (`std::vector<T>`).
 
 ---
 
