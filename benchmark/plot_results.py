@@ -84,13 +84,15 @@ def plot_python_throughput():
         errs[r["method"]][r["size"]] = float(r["stdev_s"]) * float(r["throughput_MBps"]) \
                                         / max(float(r["median_s"]), 1e-9)
 
-    x = np.arange(len(SIZE_ORDER))
+    sizes_present = [s for s in SIZE_ORDER if any(s in data[m] for m in methods)]
+
+    x = np.arange(len(sizes_present))
     offsets = np.linspace(-(len(methods)-1)/2, (len(methods)-1)/2, len(methods)) * BAR_WIDTH
 
     fig, ax = plt.subplots(figsize=(9, 5))
     for i, method in enumerate(methods):
-        vals = [data[method].get(s, 0) for s in SIZE_ORDER]
-        erv  = [errs[method].get(s, 0) for s in SIZE_ORDER]
+        vals = [data[method].get(s, 0) for s in sizes_present]
+        erv  = [errs[method].get(s, 0) for s in sizes_present]
         ax.bar(x + offsets[i], vals, BAR_WIDTH,
                label=LABELS.get(method, method),
                color=COLORS.get(method, "#888"),
@@ -101,7 +103,7 @@ def plot_python_throughput():
     ax.set_title("RNTuple Read Throughput — Python Path\n"
                  "(uproot ak→arrow vs RAG pybind11)", fontsize=13)
     ax.set_xticks(x)
-    ax.set_xticklabels(SIZE_ORDER)
+    ax.set_xticklabels(sizes_present)
     ax.legend(fontsize=10)
     ax.yaxis.grid(True, linestyle="--", alpha=0.6)
     ax.set_axisbelow(True)
@@ -122,39 +124,24 @@ def plot_cpp_overhead():
     data = defaultdict(dict)
     errs = defaultdict(dict)
 
+    # Always use wall time: the three benchmarks count bytes differently
+    # (RawRNTuple counts raw field bytes; RAG counts Arrow buffer bytes including
+    # offsets and validity bitmaps), so MB/s comparisons across them are misleading.
+    # Wall time is the apples-to-apples metric for overhead.
     for bm in benchmarks:
         name = bm.get("name", "")
-        # name format: BM_RawRNTuple/0/min_time:5.000_mean
         for bm_key in bm_names:
             base = bm_key.replace("_mean", "")
             if name.startswith(base + "/") and name.endswith("_mean"):
-                # extract arg: first segment after base/
-                rest = name[len(base)+1:]          # e.g. "0/min_time:5.000_mean"
-                arg = rest.split("/")[0]           # e.g. "0"
+                rest = name[len(base)+1:]
+                arg  = rest.split("/")[0]
                 size = label_map.get(arg, arg)
-                bps = float(bm.get("bytes_per_second", 0))
-                data[bm_key][size] = bps / 1e6
-                errs[bm_key][size] = 0.0
+                ms = float(bm.get("real_time", 0))
+                data[bm_key][size] = ms
+                errs[bm_key][size] = float(bm.get("real_time_cv", 0)) * ms / 100.0
 
-    # If bytes_per_second unavailable, use wall time
-    if not any(data.values()):
-        for bm in benchmarks:
-            name = bm.get("name", "")
-            for bm_key in bm_names:
-                base = bm_key.replace("_mean", "")
-                if name.startswith(base + "/") and name.endswith("_mean"):
-                    rest = name[len(base)+1:]
-                    arg  = rest.split("/")[0]
-                    size = label_map.get(arg, arg)
-                    ms = float(bm.get("real_time", 0))
-                    data[bm_key][size] = ms
-                    errs[bm_key][size] = float(bm.get("real_time_cv", 0)) * ms / 100.0
-
-        y_label = "Wall time (ms)"
-        title_suffix = "wall time — lower is better"
-    else:
-        y_label = "Throughput (MB/s, uncompressed)"
-        title_suffix = "throughput — higher is better"
+    y_label = "Wall time (ms) — lower is better"
+    title_suffix = "wall time — lower is better"
 
     sizes_present = [s for s in SIZE_ORDER if any(s in data[k] for k in bm_names)]
     if not sizes_present:
@@ -202,13 +189,15 @@ def plot_flight_overhead():
         errs[r["method"]][r["size"]] = float(r["stdev_s"]) * float(r["throughput_MBps"]) \
                                         / max(float(r["median_s"]), 1e-9)
 
-    x = np.arange(len(SIZE_ORDER))
+    sizes_present = [s for s in SIZE_ORDER if any(s in data[m] for m in methods)]
+
+    x = np.arange(len(sizes_present))
     offsets = np.linspace(-(len(methods)-1)/2, (len(methods)-1)/2, len(methods)) * BAR_WIDTH
 
     fig, ax = plt.subplots(figsize=(9, 5))
     for i, method in enumerate(methods):
-        vals = [data[method].get(s, 0) for s in SIZE_ORDER]
-        erv  = [errs[method].get(s, 0) for s in SIZE_ORDER]
+        vals = [data[method].get(s, 0) for s in sizes_present]
+        erv  = [errs[method].get(s, 0) for s in sizes_present]
         ax.bar(x + offsets[i], vals, BAR_WIDTH,
                label=LABELS.get(method, method),
                color=COLORS.get(method, "#888"),
@@ -219,7 +208,7 @@ def plot_flight_overhead():
     ax.set_title("Arrow Flight gRPC Overhead\n"
                  "(RAG in-process vs RAG Flight localhost)", fontsize=13)
     ax.set_xticks(x)
-    ax.set_xticklabels(SIZE_ORDER)
+    ax.set_xticklabels(sizes_present)
     ax.legend(fontsize=10)
     ax.yaxis.grid(True, linestyle="--", alpha=0.6)
     ax.set_axisbelow(True)
