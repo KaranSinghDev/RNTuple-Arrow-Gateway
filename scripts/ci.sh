@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-IMAGE="rag-env:v0.0.1"
+IMAGE="rag-env:v0.0.2"
 
 echo "[ci] building dev image..."
 docker build -f docker/dev.Dockerfile -t "$IMAGE" "$REPO_ROOT"
