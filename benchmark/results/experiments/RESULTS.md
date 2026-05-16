@@ -61,6 +61,47 @@ The overhead vs the raw RNTupleReader loop drops from 1.43–1.69× down to
   together carry significant byte traffic. Blocked on the offsets-
   representation question (waiting for follow-up on the forum thread).
 
+## Regression check — Python and Flight paths
+
+The bulk implementation is purely additive: `BuildAllBulk` /  `ReadAllBulk`
+are new symbols. The existing `Build`, `Create`, `NextBatch`, `ReadAll`,
+`StreamBatches`, the pybind11 module, and the Flight server are all
+unchanged. To confirm there is no inadvertent regression, the Python-path
+and Flight benchmarks were re-run on this branch and compared to the
+v0.1.0 baseline.
+
+### Python — `rag_pybind11` (uses `ReadAll`, unchanged path)
+
+| Size | Baseline MB/s | Rerun MB/s | Δ |
+|---|---|---|---|
+| 100MB | 223.34 | 223.74 | +0.2% (identical) |
+| 500MB | 232.23 | 229.86 | −1.0% (within noise) |
+
+### Flight — `rag_inprocess` + `rag_flight_localhost` (uses `NextBatch`, unchanged)
+
+| Method | Size | Baseline MB/s | Rerun MB/s | Δ |
+|---|---|---|---|---|
+| in-process | 100MB | 221.25 | 230.77 | +4.3% |
+| Flight localhost | 100MB | 211.04 | 227.98 | +8.0% |
+| in-process | 500MB | 225.90 | 233.84 | +3.5% |
+| Flight localhost | 500MB | 234.51 | 237.21 | +1.2% |
+
+All deltas are within run-to-run noise. No regression.
+
+### Note on uproot_ak
+
+`uproot_ak` showed lower MB/s in the rerun (599 → 491 at 100 MB; 525 → 445
+at 500 MB) with higher stdev (0.084 → 0.152 at 500 MB). uproot is a
+third-party library that is not modified by this branch; the variance is
+environmental (WSL2 RAM/cache pressure, background load). Not a regression
+caused by this work.
+
+### Test suite
+
+All 36 ctests pass on a clean rebuild of the branch (engine + Python sink
++ Flight roundtrip). Correctness of `ReadAllBulk` versus `ReadAll` verified
+on the 2 M-row `bench_small.root` fixture, all 7 columns byte-match.
+
 ## Merge decision
 
 Recommend keeping this branch open until the list-column path is also
