@@ -19,6 +19,14 @@ public:
         ROOT::RNTupleReader& reader,
         const std::shared_ptr<arrow::Schema>& schema);
 
+    // Cluster-batched bulk read. For primitive columns (int32/int64/float/double)
+    // uses RFieldBase::CreateBulk() + RBulkValues::AdoptBuffer() to fill an Arrow
+    // buffer directly. For bool and list columns falls back to the per-entry path.
+    // Returns one RecordBatch per RNTuple cluster, joined into a single Table.
+    static Result<std::shared_ptr<arrow::Table>> BuildAllBulk(
+        ROOT::RNTupleReader& reader,
+        const std::shared_ptr<arrow::Schema>& schema);
+
     ~BatchBuilder();
 
     Result<std::shared_ptr<arrow::RecordBatch>> Build(

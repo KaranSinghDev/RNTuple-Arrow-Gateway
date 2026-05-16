@@ -32,6 +32,10 @@ public:
     // Materialise all entries into a single Table.
     Result<std::shared_ptr<arrow::Table>> ReadAll();
 
+    // Experimental: cluster-batched bulk path (CreateBulk + AdoptBuffer + ReadBulk).
+    // Primitive columns are bulk-read; bool/list columns fall back to per-entry.
+    Result<std::shared_ptr<arrow::Table>> ReadAllBulk();
+
     // Push-based: resets cursor and invokes on_batch for every batch.
     Status StreamBatches(BatchCallback on_batch);
 

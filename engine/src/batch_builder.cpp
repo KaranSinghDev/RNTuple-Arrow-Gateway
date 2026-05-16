@@ -1,10 +1,16 @@
 #include <rag/batch_builder.hpp>
 #include "internal/column_appender.hpp"
 
+#include <arrow/array/array_primitive.h>
 #include <arrow/array/builder_nested.h>
 #include <arrow/array/builder_primitive.h>
+#include <arrow/buffer.h>
+#include <arrow/table.h>
 #include <arrow/type.h>
+#include <ROOT/RFieldBase.hxx>
+#include <ROOT/RNTupleDescriptor.hxx>
 #include <ROOT/RNTupleReader.hxx>
+#include <ROOT/RNTupleUtil.hxx>
 #include <ROOT/RNTupleView.hxx>
 
 #include <cstdint>
@@ -165,6 +171,68 @@ arrow::Result<std::unique_ptr<detail::IColumnAppender>> MakeAppender(
     }
 }
 
+// Bulk-read one cluster's worth of a primitive column directly into an Arrow buffer.
+template <typename CppType>
+arrow::Result<std::shared_ptr<arrow::Array>> BulkReadCluster(
+    ROOT::RNTupleReader& reader,
+    const std::string& field_name,
+    ROOT::DescriptorId_t cluster_id,
+    ROOT::NTupleSize_t n_entries,
+    const std::shared_ptr<arrow::DataType>& arrow_type)
+{
+    auto view = reader.GetView<CppType>(field_name);
+    auto bulk = view.CreateBulk();
+
+    ARROW_ASSIGN_OR_RAISE(
+        auto buf,
+        arrow::AllocateBuffer(
+            static_cast<std::int64_t>(n_entries * sizeof(CppType))));
+
+    bulk.AdoptBuffer(buf->mutable_data(), n_entries);
+    bulk.ReadBulk(ROOT::RNTupleLocalIndex(cluster_id, 0), nullptr, n_entries);
+
+    return std::make_shared<arrow::PrimitiveArray>(
+        arrow_type,
+        static_cast<std::int64_t>(n_entries),
+        std::shared_ptr<arrow::Buffer>(std::move(buf)));
+}
+
+// Per-cluster column read: bulk path for primitives, per-entry fallback for bool/lists.
+arrow::Result<std::shared_ptr<arrow::Array>> ReadColumnInCluster(
+    ROOT::RNTupleReader& reader,
+    const std::string& field_name,
+    const std::shared_ptr<arrow::DataType>& arrow_type,
+    ROOT::DescriptorId_t cluster_id,
+    ROOT::NTupleSize_t first_entry,
+    ROOT::NTupleSize_t n_entries)
+{
+    using arrow::Type;
+    switch (arrow_type->id()) {
+    case Type::INT32:
+        return BulkReadCluster<std::int32_t>(
+            reader, field_name, cluster_id, n_entries, arrow_type);
+    case Type::INT64:
+        return BulkReadCluster<std::int64_t>(
+            reader, field_name, cluster_id, n_entries, arrow_type);
+    case Type::FLOAT:
+        return BulkReadCluster<float>(
+            reader, field_name, cluster_id, n_entries, arrow_type);
+    case Type::DOUBLE:
+        return BulkReadCluster<double>(
+            reader, field_name, cluster_id, n_entries, arrow_type);
+    default: {
+        // bool needs bit-pack conversion; list columns need offsets reconstruction.
+        // Both wait on Jakob's clarification — use the per-entry path for now.
+        ARROW_ASSIGN_OR_RAISE(
+            auto appender, MakeAppender(reader, field_name, arrow_type));
+        for (auto i = first_entry; i < first_entry + n_entries; ++i) {
+            ARROW_RETURN_NOT_OK(appender->Append(i));
+        }
+        return appender->Finish();
+    }
+    }
+}
+
 } // namespace
 
 BatchBuilder::BatchBuilder(std::shared_ptr<arrow::Schema> schema)
@@ -204,6 +272,38 @@ Result<std::shared_ptr<arrow::RecordBatch>> BatchBuilder::Build(
     }
 
     return arrow::RecordBatch::Make(schema_, static_cast<std::int64_t>(count), arrays);
+}
+
+Result<std::shared_ptr<arrow::Table>> BatchBuilder::BuildAllBulk(
+    ROOT::RNTupleReader& reader,
+    const std::shared_ptr<arrow::Schema>& schema)
+{
+    const auto& desc = reader.GetDescriptor();
+
+    std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
+
+    for (const auto& cluster : desc.GetClusterIterable()) {
+        const auto cluster_id  = cluster.GetId();
+        const auto first_entry = cluster.GetFirstEntryIndex();
+        const auto n_entries   = cluster.GetNEntries();
+
+        arrow::ArrayVector arrays;
+        arrays.reserve(schema->num_fields());
+
+        for (int i = 0; i < schema->num_fields(); ++i) {
+            const auto& f = schema->field(i);
+            ARROW_ASSIGN_OR_RAISE(
+                auto arr,
+                ReadColumnInCluster(reader, f->name(), f->type(),
+                                    cluster_id, first_entry, n_entries));
+            arrays.push_back(std::move(arr));
+        }
+
+        batches.push_back(arrow::RecordBatch::Make(
+            schema, static_cast<std::int64_t>(n_entries), arrays));
+    }
+
+    return arrow::Table::FromRecordBatches(schema, batches);
 }
 
 } // namespace rag

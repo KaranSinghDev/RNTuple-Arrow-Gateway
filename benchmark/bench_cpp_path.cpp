@@ -128,3 +128,24 @@ BENCHMARK(BM_RAGStreaming)
     ->Arg(0)->Arg(1)->Arg(2)
     ->Unit(benchmark::kMillisecond)
     ->MinTime(5.0);
+
+// ── Experimental: RAG ReadAllBulk — CreateBulk + AdoptBuffer per cluster ─────
+// Primitives (i32/i64/f32/f64) bulk-read; bool and list columns fall back to
+// the per-entry path. Apples-to-apples vs BM_RAGReadAll (same schema, same data).
+static void BM_RAGReadAllBulk(benchmark::State& state) {
+    const char* path = kFixtures[state.range(0)];
+    std::int64_t total_bytes = 0;
+    for (auto _ : state) {
+        auto file  = rag::RNTupleFile::Open(path, "bench").ValueOrDie();
+        auto table = file->ReadAllBulk().ValueOrDie();
+        benchmark::DoNotOptimize(table.get());
+        total_bytes = TableBytes(*table);
+    }
+    state.SetBytesProcessed(
+        static_cast<std::int64_t>(state.iterations()) * total_bytes);
+    state.SetLabel(kLabels[state.range(0)]);
+}
+BENCHMARK(BM_RAGReadAllBulk)
+    ->Arg(0)->Arg(1)->Arg(2)
+    ->Unit(benchmark::kMillisecond)
+    ->MinTime(5.0);

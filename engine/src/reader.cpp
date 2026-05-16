@@ -49,6 +49,10 @@ Result<std::shared_ptr<arrow::RecordBatch>> RNTupleFile::NextBatch() {
     return batch;
 }
 
+Result<std::shared_ptr<arrow::Table>> RNTupleFile::ReadAllBulk() {
+    return BatchBuilder::BuildAllBulk(*reader_, schema_);
+}
+
 Result<std::shared_ptr<arrow::Table>> RNTupleFile::ReadAll() {
     next_entry_ = 0;
     std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
