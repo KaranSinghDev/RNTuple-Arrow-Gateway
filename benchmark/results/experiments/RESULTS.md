@@ -107,3 +107,68 @@ on the 2 M-row `bench_small.root` fixture, all 7 columns byte-match.
 Recommend keeping this branch open until the list-column path is also
 resolved, so the v0.2.0 release can ship both improvements together.
 Master stays at v0.1.0 in the meantime.
+
+---
+
+## Step 2 update — list-column bulk path implemented
+
+Following Jakob Blomer's clarification on the ROOT forum (two bulk read
+calls + Arrow offset fixup, using `RNTupleCardinality` for per-entry sizes
+and the inner `_0` subfield view for the flat values buffer), `vi32` and
+`vf32` columns now also flow through `CreateBulk()` + `AdoptBuffer()`.
+
+### Implementation
+
+`engine/src/batch_builder.cpp` adds `BulkReadListCluster<CppType>`:
+
+1. `RNTupleView<ROOT::RNTupleCardinality<std::uint64_t>>` on the
+   collection field → `CreateBulk()` + `AdoptBuffer(sizes.data(), n_entries)`
+   → `ReadBulk(LocalIndex(cluster_id, 0), nullptr, n_entries)`.
+2. Cumulative sum of sizes → Arrow `int32` offsets buffer
+   (`n_entries + 1` entries).
+3. `RNTupleView<CppType>("vi32._0")` (inner subfield) → `CreateBulk()` +
+   `AdoptBuffer(values_buf, total_values)` → `ReadBulk(LocalIndex(cluster_id, 0), nullptr, total_values)`.
+4. `arrow::ListArray(arrow::list(inner_type), n_entries, offsets, values)`.
+
+`ReadColumnInCluster` now dispatches the `Type::LIST` case to
+`BulkReadListCluster<inner>` for primitive inner types (int32 / int64 /
+float / double); bool list inner type falls through to the per-entry path.
+
+### Results (3 reps × ≥ 5 s, median)
+
+| Benchmark | 100 MB | 500 MB | 1 GB |
+|---|---|---|---|
+| `BM_RawRNTuple` (this run) | 385.9 ms | 1788.4 ms | 3465.3 ms |
+| `BM_RAGReadAll` (per-entry) | 536.8 ms | 2582.0 ms | 5414.6 ms |
+| **`BM_RAGReadAllBulk` (bulk + lists)** | **252.8 ms** | **1232.9 ms** | **2428.8 ms** |
+
+### Overhead ratios vs raw RNTuple loop
+
+| Path | 100 MB | 500 MB | 1 GB |
+|---|---|---|---|
+| `BM_RAGReadAll` (per-entry) | 1.39× | 1.44× | 1.56× |
+| **`BM_RAGReadAllBulk` (bulk + lists)** | **0.66×** | **0.69×** | **0.70×** |
+
+### Wall-time reduction vs main / v0.1.0 ReadAll
+
+| Size | v0.1.0 ReadAll | Bulk + lists | Δ |
+|---|---|---|---|
+| 100 MB | 555.7 ms | 252.8 ms | **−54.5%** |
+| 500 MB | 2617.5 ms | 1232.9 ms | **−52.9%** |
+| 1 GB | 5822.1 ms | 2428.8 ms | **−58.3%** |
+
+### Why the bulk path beats the raw loop
+
+The raw loop uses per-entry `view(i)` access on `RNTupleView<std::vector<T>>`,
+which returns a fresh `std::vector<T>` per entry (allocation + copy). The
+bulk path uses `CreateBulk()` + `AdoptBuffer()` — ROOT's intended fast path
+for high-throughput consumers — and writes directly into Arrow's pre-
+allocated buffers with no per-entry container construction. Closing the
+list-column gap removes the dominant source of per-entry overhead.
+
+### Correctness
+
+`ReadAll()` and `ReadAllBulk()` produce byte-identical Tables on the
+`bench_small.root` fixture across all 7 columns (2 M rows), now including
+the list columns `vi32` and `vf32`. All 36 ctests still pass on a clean
+rebuild of the branch.

@@ -197,6 +197,70 @@ arrow::Result<std::shared_ptr<arrow::Array>> BulkReadCluster(
         std::shared_ptr<arrow::Buffer>(std::move(buf)));
 }
 
+// Bulk-read one cluster's worth of a std::vector<CppType> column.
+// Two bulk reads + Arrow offsets fixup, per Jakob Blomer's note on the ROOT forum:
+//   (1) RNTupleCardinality view -> per-entry collection sizes
+//   (2) inner subfield "._0" view -> flat values buffer
+//   (3) convert sizes -> Arrow cumulative offsets
+template <typename CppType>
+arrow::Result<std::shared_ptr<arrow::Array>> BulkReadListCluster(
+    ROOT::RNTupleReader& reader,
+    const std::string& field_name,
+    ROOT::DescriptorId_t cluster_id,
+    ROOT::NTupleSize_t n_entries,
+    const std::shared_ptr<arrow::DataType>& arrow_inner_type)
+{
+    // (1) Bulk-read cardinality (per-entry sizes).
+    auto card_view =
+        reader.GetView<ROOT::RNTupleCardinality<std::uint64_t>>(field_name);
+    auto card_bulk = card_view.CreateBulk();
+
+    std::vector<ROOT::RNTupleCardinality<std::uint64_t>> sizes(n_entries);
+    card_bulk.AdoptBuffer(sizes.data(), n_entries);
+    card_bulk.ReadBulk(ROOT::RNTupleLocalIndex(cluster_id, 0), nullptr, n_entries);
+
+    // (2) Build Arrow's cumulative offsets buffer (int32 offsets).
+    ARROW_ASSIGN_OR_RAISE(
+        auto offsets_buf,
+        arrow::AllocateBuffer(
+            static_cast<std::int64_t>((n_entries + 1) * sizeof(std::int32_t))));
+    auto* offsets = reinterpret_cast<std::int32_t*>(offsets_buf->mutable_data());
+    offsets[0] = 0;
+    std::int64_t running = 0;
+    for (ROOT::NTupleSize_t i = 0; i < n_entries; ++i) {
+        running += static_cast<std::int64_t>(sizes[i].fValue);
+        offsets[i + 1] = static_cast<std::int32_t>(running);
+    }
+    const std::int64_t total_values = running;
+
+    // (3) Bulk-read flat values via the inner subfield.
+    auto val_view = reader.GetView<CppType>(field_name + "._0");
+    auto val_bulk = val_view.CreateBulk();
+
+    ARROW_ASSIGN_OR_RAISE(
+        auto values_buf,
+        arrow::AllocateBuffer(
+            static_cast<std::int64_t>(total_values * sizeof(CppType))));
+
+    if (total_values > 0) {
+        val_bulk.AdoptBuffer(values_buf->mutable_data(),
+                             static_cast<std::size_t>(total_values));
+        val_bulk.ReadBulk(ROOT::RNTupleLocalIndex(cluster_id, 0), nullptr,
+                          static_cast<std::size_t>(total_values));
+    }
+
+    auto values_array = std::make_shared<arrow::PrimitiveArray>(
+        arrow_inner_type,
+        total_values,
+        std::shared_ptr<arrow::Buffer>(std::move(values_buf)));
+
+    return std::make_shared<arrow::ListArray>(
+        arrow::list(arrow_inner_type),
+        static_cast<std::int64_t>(n_entries),
+        std::shared_ptr<arrow::Buffer>(std::move(offsets_buf)),
+        values_array);
+}
+
 // Per-cluster column read: bulk path for primitives, per-entry fallback for bool/lists.
 arrow::Result<std::shared_ptr<arrow::Array>> ReadColumnInCluster(
     ROOT::RNTupleReader& reader,
@@ -220,9 +284,30 @@ arrow::Result<std::shared_ptr<arrow::Array>> ReadColumnInCluster(
     case Type::DOUBLE:
         return BulkReadCluster<double>(
             reader, field_name, cluster_id, n_entries, arrow_type);
+    case Type::LIST: {
+        auto inner =
+            std::static_pointer_cast<arrow::ListType>(arrow_type)->value_type();
+        switch (inner->id()) {
+        case Type::INT32:
+            return BulkReadListCluster<std::int32_t>(
+                reader, field_name, cluster_id, n_entries, inner);
+        case Type::INT64:
+            return BulkReadListCluster<std::int64_t>(
+                reader, field_name, cluster_id, n_entries, inner);
+        case Type::FLOAT:
+            return BulkReadListCluster<float>(
+                reader, field_name, cluster_id, n_entries, inner);
+        case Type::DOUBLE:
+            return BulkReadListCluster<double>(
+                reader, field_name, cluster_id, n_entries, inner);
+        default:
+            break;  // fall through to per-entry path below
+        }
+        [[fallthrough]];
+    }
     default: {
-        // bool needs bit-pack conversion; list columns need offsets reconstruction.
-        // Both wait on Jakob's clarification — use the per-entry path for now.
+        // bool inner (bit-pack) and any unsupported list inner type fall back
+        // to the per-entry appender used by the original BatchBuilder::Build.
         ARROW_ASSIGN_OR_RAISE(
             auto appender, MakeAppender(reader, field_name, arrow_type));
         for (auto i = first_entry; i < first_entry + n_entries; ++i) {
