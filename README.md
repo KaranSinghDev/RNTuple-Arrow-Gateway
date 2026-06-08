@@ -60,7 +60,7 @@ I ran these on a WSL2 host (12th Gen Intel i7-12700H, 11.7 GB RAM), so I'd treat
 
 What I found:
 
-- **C++ path.** My `ReadAll` is **1.42× / 1.44× / 1.61× slower** than a raw `RNTupleReader` loop at 100 MB / 500 MB / 1 GB. I set myself a `< 2×` target; this clears it. Streaming is slightly faster than ReadAll at 1 GB (5133 ms vs 5803 ms) — ReadAll holds the full table in memory while accumulating batches, so the difference shows up at larger sizes.
+- **C++ path.** A **bulk-read path** (using ROOT's `CreateBulk` API to fill Arrow buffers directly, instead of copying value-by-value) reads the full table in **0.66× / 0.69× / 0.70×** the time of a raw `RNTupleReader` loop at 100 MB / 500 MB / 1 GB — i.e. *faster* than a naive per-entry loop, because the bulk path avoids per-entry container allocation for the list columns. That's a **~50% wall-time reduction** over the earlier per-entry `ReadAll` (which was 1.4–1.6× the raw loop). Output is verified byte-identical to the per-entry path across all columns, including edge cases (empty ntuple, all-empty list columns).
 - **Arrow Flight (localhost).** **~5% overhead** vs in-process at 100 MB; within measurement noise at 500 MB. Flight looks like a perfectly fine transport for this kind of data.
 - **Python path.** `pybind11` route is **2.4× / 2.0× slower** than `uproot + ak.to_arrow()` at 100 MB / 500 MB. That's the negative result I want to be upfront about — uproot's hot path is heavily optimised (compiled C++/Cython via Awkward + AwkwardForth), and I haven't profiled my code yet to find where the gap actually comes from.
 
