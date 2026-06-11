@@ -50,7 +50,7 @@ Types covered: `int32`, `int64`, `float`, `double`, `bool`, and single-level `st
 └───────────┘  └──────────────────────────┘
 ```
 
-The engine is the only reusable piece; the two sinks are thin wrappers over the same C++ API, which means the same bytes flow through all three paths.
+The engine is the only reusable piece; the two sinks are thin wrappers over the same C++ API, which means the same bytes flow through all paths.
 
 ---
 
