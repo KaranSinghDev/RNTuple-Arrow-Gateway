@@ -101,6 +101,66 @@ Running the Flight server against a built tree:
 
 ---
 
+## Example usage
+
+Full API reference: [`docs/API.md`](docs/API.md).
+
+### Python — read an RNTuple file into pandas
+
+```python
+import rag_gateway
+
+table = rag_gateway.open("data.root", "events")   # -> pyarrow.Table
+print(table.num_rows, table.schema)
+
+df = table.to_pandas()
+print(df.head())
+```
+
+### C++ — read an RNTuple file into an Arrow table
+
+```cpp
+#include <rag/reader.hpp>
+
+auto file  = rag::RNTupleFile::Open("data.root", "events").ValueOrDie();
+auto table = file->ReadAll().ValueOrDie();
+
+std::cout << table->num_rows() << " rows\n";
+std::cout << table->schema()->ToString() << "\n";
+```
+
+To stream instead of loading the whole file, call `NextBatch()` in a loop:
+
+```cpp
+auto file = rag::RNTupleFile::Open("data.root", "events").ValueOrDie();
+while (auto batch = file->NextBatch().ValueOrDie()) {
+    // use batch (an arrow::RecordBatch)
+}
+```
+
+### Arrow Flight — read over the network without ROOT
+
+Start the server on a machine that has ROOT:
+
+```bash
+rag-flight-server --file data.root --ntuple events --port 9090
+```
+
+Any Arrow client can now read the data. This client needs `pyarrow` only —
+ROOT is not required:
+
+```python
+import pyarrow.flight as fl
+
+client = fl.connect("grpc://localhost:9090")
+ticket = fl.Ticket(b"events")
+table  = client.do_get(ticket).read_all()   # -> pyarrow.Table
+
+print(table.num_rows)
+```
+
+---
+
 ## What's next
 
 Rough priority order :
