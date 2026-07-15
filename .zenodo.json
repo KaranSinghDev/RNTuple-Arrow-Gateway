@@ -1,12 +1,12 @@
 {
   "title": "RNArrow — RNTuple Arrow Gateway",
-  "description": "A C++ library and Arrow Flight gRPC server that reads CERN ROOT RNTuple physics data files and exposes the data as Apache Arrow — both in-process to Python via pybind11, and over the network through Arrow Flight streaming. Developed in the context of high-energy physics data analysis, motivated by experience as a former external member of the LHCb Collaboration at CERN (via Instituto de Fisica Corpuscular, IFIC). Targets the interoperability gap between ROOT's new columnar on-disk format (RNTuple, stable since ROOT 6.36) and the wider Arrow/pandas/Spark ecosystem.",
+  "description": "A C++ library and Arrow Flight gRPC server that reads CERN ROOT RNTuple physics data files and exposes the data as Apache Arrow — both in-process to Python via pybind11, and over the network through Arrow Flight streaming. It targets the interoperability gap between RNTuple, ROOT's columnar on-disk format, and the wider Apache Arrow ecosystem.",
   "upload_type": "software",
   "license": "Apache-2.0",
   "creators": [
     {
       "name": "Singh, Karan",
-      "affiliation": "SRM University Delhi NCR Sonepat",
+      "affiliation": "Independent Researcher",
       "orcid": "0009-0000-0920-2379"
     }
   ],
